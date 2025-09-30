@@ -4,7 +4,7 @@ const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 const configureCloudinary = require('./config/cloudinary');
 const userRoutes = require('./routes/userRoutes');
-// On corrige la majuscule ici
+// Le chemin avec la bonne majuscule
 const uploadRoutes = require('./routes/uploadroutes'); 
 
 dotenv.config();
