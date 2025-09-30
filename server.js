@@ -2,12 +2,13 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const connectDB = require('./config/db');
-const configureCloudinary = require('./config/cloudinary'); // 1. Importer
+const configureCloudinary = require('./config/cloudinary');
 const userRoutes = require('./routes/userRoutes');
-const uploadRoutes = require('./routes/uploadroutes'); // 2. Importer
+// On corrige la majuscule ici
+const uploadRoutes = require('./routes/uploadroutes'); 
 
 dotenv.config();
-configureCloudinary(); // 3. Configurer
+configureCloudinary();
 connectDB();
 
 const app = express();
@@ -23,7 +24,7 @@ app.get('/', (req, res) => {
 });
 
 app.use('/api/users', userRoutes);
-app.use('/api/upload', uploadRoutes); // 4. Utiliser les nouvelles routes
+app.use('/api/upload', uploadRoutes);
 
 const PORT = process.env.PORT || 5000;
 
