@@ -4,8 +4,8 @@ const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 const configureCloudinary = require('./config/cloudinary');
 const userRoutes = require('./routes/userRoutes');
-// Le chemin avec la bonne majuscule
-const uploadRoutes = require('./routes/tempsRoutes'); 
+// On s'assure d'importer le fichier avec le bon nom : tempRoutes
+const uploadRoutes = require('./routes/tempRoutes'); 
 
 dotenv.config();
 configureCloudinary();

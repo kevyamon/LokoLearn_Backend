@@ -3,23 +3,19 @@ const BannerImage = require('../models/bannerImageModel');
 
 // @desc    Téléverser une image pour la bannière
 // @route   POST /api/upload/banner
-// @access  Admin (à protéger plus tard)
 const uploadBannerImage = async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'Aucun fichier sélectionné' });
     }
 
-    // On transforme le buffer du fichier en data URI pour Cloudinary
     const b64 = Buffer.from(req.file.buffer).toString("base64");
     let dataURI = "data:" + req.file.mimetype + ";base64," + b64;
 
-    // On envoie à Cloudinary
     const result = await cloudinary.uploader.upload(dataURI, {
       folder: "lokolearn_banner",
     });
 
-    // On sauvegarde l'URL dans notre base de données
     const newImage = new BannerImage({
       imageUrl: result.secure_url,
       publicId: result.public_id,
@@ -39,7 +35,6 @@ const uploadBannerImage = async (req, res) => {
 
 // @desc    Récupérer toutes les images de la bannière
 // @route   GET /api/upload/banner
-// @access  Public
 const getBannerImages = async (req, res) => {
     try {
         const images = await BannerImage.find({});
@@ -49,4 +44,27 @@ const getBannerImages = async (req, res) => {
     }
 };
 
-module.exports = { uploadBannerImage, getBannerImages };
+// @desc    Supprimer une image de la bannière
+// @route   DELETE /api/upload/banner/:id
+const deleteBannerImage = async (req, res) => {
+  try {
+    const image = await BannerImage.findById(req.params.id);
+
+    if (!image) {
+      return res.status(404).json({ message: 'Image non trouvée' });
+    }
+
+    // 1. Supprimer l'image de Cloudinary
+    await cloudinary.uploader.destroy(image.publicId);
+
+    // 2. Supprimer la référence de notre base de données
+    await BannerImage.deleteOne({ _id: req.params.id });
+
+    res.json({ message: 'Image supprimée avec succès' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur serveur lors de la suppression' });
+  }
+};
+
+module.exports = { uploadBannerImage, getBannerImages, deleteBannerImage };
