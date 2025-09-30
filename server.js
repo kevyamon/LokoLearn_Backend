@@ -5,7 +5,7 @@ const connectDB = require('./config/db');
 const configureCloudinary = require('./config/cloudinary');
 const userRoutes = require('./routes/userRoutes');
 // Le chemin avec la bonne majuscule
-const uploadRoutes = require('./routes/uploadroutes'); 
+const uploadRoutes = require('./routes/tempsRoutes'); 
 
 dotenv.config();
 configureCloudinary();
