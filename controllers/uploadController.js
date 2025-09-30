@@ -9,23 +9,30 @@ const uploadBannerImage = async (req, res) => {
       return res.status(400).json({ message: 'Aucun fichier sélectionné' });
     }
 
-    const b64 = Buffer.from(req.file.buffer).toString("base64");
-    let dataURI = "data:" + req.file.mimetype + ";base64," + b64;
+    // On utilise un stream pour envoyer le buffer directement à Cloudinary
+    const uploadStream = cloudinary.uploader.upload_stream(
+      { folder: "lokolearn_banner" },
+      async (error, result) => {
+        if (error) {
+          console.error(error);
+          return res.status(500).json({ message: 'Erreur serveur lors du téléversement' });
+        }
 
-    const result = await cloudinary.uploader.upload(dataURI, {
-      folder: "lokolearn_banner",
-    });
+        const newImage = new BannerImage({
+          imageUrl: result.secure_url,
+          publicId: result.public_id,
+        });
+        await newImage.save();
 
-    const newImage = new BannerImage({
-      imageUrl: result.secure_url,
-      publicId: result.public_id,
-    });
-    await newImage.save();
+        res.status(201).json({
+          message: 'Image téléversée avec succès',
+          imageUrl: result.secure_url,
+        });
+      }
+    );
 
-    res.status(201).json({
-      message: 'Image téléversée avec succès',
-      imageUrl: result.secure_url,
-    });
+    // On envoie le buffer du fichier dans le stream
+    uploadStream.end(req.file.buffer);
 
   } catch (error) {
     console.error(error);

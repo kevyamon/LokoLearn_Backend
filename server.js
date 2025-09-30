@@ -4,8 +4,8 @@ const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 const configureCloudinary = require('./config/cloudinary');
 const userRoutes = require('./routes/userRoutes');
-// On s'assure d'importer le fichier avec le bon nom : tempRoutes
-const uploadRoutes = require('./routes/tempRoutes'); 
+// On met à jour l'importation pour refléter le renommage
+const assetRoutes = require('./routes/assetRoutes'); 
 
 dotenv.config();
 configureCloudinary();
@@ -24,7 +24,8 @@ app.get('/', (req, res) => {
 });
 
 app.use('/api/users', userRoutes);
-app.use('/api/upload', uploadRoutes);
+// On utilise la nouvelle variable pour plus de clarté
+app.use('/api/upload', assetRoutes);
 
 const PORT = process.env.PORT || 5000;
 
