@@ -1,5 +1,6 @@
 const cloudinary = require('cloudinary').v2;
 const BannerImage = require('../models/bannerImageModel');
+const { getIO } = require('../socket/socketManager'); // On importe le getter de notre instance io
 
 // @desc    Téléverser une image pour la bannière
 // @route   POST /api/upload/banner
@@ -9,7 +10,6 @@ const uploadBannerImage = async (req, res) => {
       return res.status(400).json({ message: 'Aucun fichier sélectionné' });
     }
 
-    // On utilise un stream pour envoyer le buffer directement à Cloudinary
     const uploadStream = cloudinary.uploader.upload_stream(
       { folder: "lokolearn_banner" },
       async (error, result) => {
@@ -24,6 +24,9 @@ const uploadBannerImage = async (req, res) => {
         });
         await newImage.save();
 
+        // Émission de l'événement socket
+        getIO().emit('banner_updated');
+
         res.status(201).json({
           message: 'Image téléversée avec succès',
           imageUrl: result.secure_url,
@@ -31,7 +34,6 @@ const uploadBannerImage = async (req, res) => {
       }
     );
 
-    // On envoie le buffer du fichier dans le stream
     uploadStream.end(req.file.buffer);
 
   } catch (error) {
@@ -61,11 +63,11 @@ const deleteBannerImage = async (req, res) => {
       return res.status(404).json({ message: 'Image non trouvée' });
     }
 
-    // 1. Supprimer l'image de Cloudinary
     await cloudinary.uploader.destroy(image.publicId);
-
-    // 2. Supprimer la référence de notre base de données
     await BannerImage.deleteOne({ _id: req.params.id });
+
+    // Émission de l'événement socket
+    getIO().emit('banner_updated');
 
     res.json({ message: 'Image supprimée avec succès' });
   } catch (error) {
