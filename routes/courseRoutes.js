@@ -1,13 +1,22 @@
 // routes/courseRoutes.js
 const express = require('express');
 const router = express.Router();
-const { createCourse, getCourseFormData } = require('../controllers/courseController');
-const { protect, professor } = require('../middleware/authMiddleware'); // Assure-toi d'avoir ces middlewares
+const { 
+  createCourse, 
+  getCourses, 
+  getCourseFormData, 
+  incrementView,
+  getProfStats 
+} = require('../controllers/courseController');
+const { protect, professor } = require('../middleware/authMiddleware');
 
-// Route publique ou protégée pour récupérer les infos du formulaire
+// Publique : Lire les cours et Incrémenter vue
+router.get('/', getCourses);
+router.put('/:id/view', incrementView); // N'importe qui peut voir un cours (pour l'instant)
+
+// Protégé (Prof)
 router.get('/form-data', protect, getCourseFormData); 
-
-// Route création de cours (Seul un prof connecté peut le faire)
+router.get('/my-stats', protect, professor, getProfStats); // <--- Stats Dashboard
 router.post('/', protect, professor, createCourse);
 
 module.exports = router;
