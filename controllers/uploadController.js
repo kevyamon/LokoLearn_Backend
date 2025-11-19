@@ -1,79 +1,49 @@
-const cloudinary = require('cloudinary').v2;
-const BannerImage = require('../models/bannerImageModel');
-const { getIO } = require('../socket/socketManager'); // On importe le getter de notre instance io
+// controllers/uploadController.js
+const cloudinary = require('../config/cloudinary');
+const streamifier = require('streamifier');
 
-// @desc    Téléverser une image pour la bannière
-// @route   POST /api/upload/banner
-const uploadBannerImage = async (req, res) => {
+// @desc    Uploader un fichier vers Cloudinary
+// @route   POST /api/upload
+// @access  Private (Prof)
+const uploadFile = async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ message: 'Aucun fichier sélectionné' });
+      return res.status(400).json({ message: 'Aucun fichier fourni.' });
     }
 
+    // Configuration de l'upload (Dossier: cours)
+    // resource_type: 'auto' permet d'accepter images, pdfs, vidéos, raw files...
     const uploadStream = cloudinary.uploader.upload_stream(
-      { folder: "lokolearn_banner" },
-      async (error, result) => {
+      {
+        folder: 'lokolearn_cours',
+        resource_type: 'auto', 
+        use_filename: true,
+        unique_filename: true
+      },
+      (error, result) => {
         if (error) {
-          console.error(error);
-          return res.status(500).json({ message: 'Erreur serveur lors du téléversement' });
+          console.error('Cloudinary Error:', error);
+          return res.status(500).json({ message: "Erreur lors de l'upload Cloudinary." });
         }
 
-        const newImage = new BannerImage({
-          imageUrl: result.secure_url,
-          publicId: result.public_id,
-        });
-        await newImage.save();
-
-        // Émission de l'événement socket
-        getIO().emit('banner_updated');
-
-        res.status(201).json({
-          message: 'Image téléversée avec succès',
-          imageUrl: result.secure_url,
+        // Succès ! On renvoie les infos utiles
+        res.status(200).json({
+          url: result.secure_url,
+          public_id: result.public_id,
+          format: result.format,
+          bytes: result.bytes, // Taille en octets
+          original_filename: req.file.originalname
         });
       }
     );
 
-    uploadStream.end(req.file.buffer);
+    // On transforme le buffer (mémoire) en stream pour Cloudinary
+    streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
 
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Erreur serveur lors du téléversement' });
+    res.status(500).json({ message: 'Erreur serveur upload.' });
   }
 };
 
-// @desc    Récupérer toutes les images de la bannière
-// @route   GET /api/upload/banner
-const getBannerImages = async (req, res) => {
-    try {
-        const images = await BannerImage.find({});
-        res.json(images);
-    } catch (error) {
-        res.status(500).json({ message: "Erreur serveur" });
-    }
-};
-
-// @desc    Supprimer une image de la bannière
-// @route   DELETE /api/upload/banner/:id
-const deleteBannerImage = async (req, res) => {
-  try {
-    const image = await BannerImage.findById(req.params.id);
-
-    if (!image) {
-      return res.status(404).json({ message: 'Image non trouvée' });
-    }
-
-    await cloudinary.uploader.destroy(image.publicId);
-    await BannerImage.deleteOne({ _id: req.params.id });
-
-    // Émission de l'événement socket
-    getIO().emit('banner_updated');
-
-    res.json({ message: 'Image supprimée avec succès' });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Erreur serveur lors de la suppression' });
-  }
-};
-
-module.exports = { uploadBannerImage, getBannerImages, deleteBannerImage };
+module.exports = { uploadFile };
