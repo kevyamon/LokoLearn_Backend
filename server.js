@@ -1,3 +1,4 @@
+// kevyamon/lokolearn_backend/LokoLearn_Backend-80d946f165c0cfa3aca77a220fc2a35a52f497cd/server.js
 const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
@@ -9,6 +10,7 @@ const connectDB = require('./config/db');
 const userRoutes = require('./routes/userRoutes');
 const courseRoutes = require('./routes/courseRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
+const settingRoutes = require('./routes/settingRoutes'); // NOUVEAU
 
 dotenv.config();
 connectDB();
@@ -16,21 +18,17 @@ connectDB();
 const app = express();
 const server = http.createServer(app);
 
-// --- CONFIGURATION CORS ULTRA-PERMISSIVE (Pour réparer l'erreur) ---
-// On autorise explicitement ton frontend local et la version prod si elle existe
+// --- CONFIGURATION CORS ---
 const allowedOrigins = [
   "http://localhost:5173", 
   "http://localhost:3000",
-  process.env.FRONTEND_URL // Si défini sur Render
+  process.env.FRONTEND_URL
 ];
 
 app.use(cors({
     origin: function (origin, callback) {
-        // allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
         if (allowedOrigins.indexOf(origin) === -1 && !origin.includes('render.com')) {
-            // Si l'origine n'est pas dans la liste, on accepte quand même pour le dev (optionnel, ou on bloque)
-            // Pour le débogage actuel, on accepte tout :
             return callback(null, true);
         }
         return callback(null, true);
@@ -43,13 +41,13 @@ app.use(express.json());
 // --- SOCKET.IO CONFIGURATION ---
 const io = new Server(server, {
     cors: {
-        origin: "*", // On ouvre Socket.io aussi
+        origin: "*",
         methods: ["GET", "POST"],
         credentials: true
     }
 });
 
-// Test simple pour voir si le serveur répond
+// Test simple
 app.get('/', (req, res) => {
     res.status(200).send('API LokoLearn en ligne 🚀');
 });
@@ -58,6 +56,7 @@ app.get('/', (req, res) => {
 app.use('/api/users', userRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/settings', settingRoutes); // NOUVEAU : Activation des settings
 
 const PORT = process.env.PORT || 5000;
 
