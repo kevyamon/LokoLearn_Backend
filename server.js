@@ -56,7 +56,7 @@ app.get('/', (req, res) => {
 app.use('/api/users', userRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/upload', uploadRoutes);
-app.use('/api/settings', settingRoutes); // NOUVEAU : Activation des settings
+app.use('/api/settings', settingRoutes); // ACTIVATION DES SETTINGS
 
 const PORT = process.env.PORT || 5000;
 

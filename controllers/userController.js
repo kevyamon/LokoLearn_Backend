@@ -1,6 +1,6 @@
 // kevyamon/lokolearn_backend/LokoLearn_Backend-80d946f165c0cfa3aca77a220fc2a35a52f497cd/controllers/userController.js
 const User = require('../models/User');
-const SystemSetting = require('../models/SystemSetting'); // IMPORT DU MODÈLE SETTING
+const SystemSetting = require('../models/SystemSetting'); // IMPORT IMPORTANT
 const jwt = require('jsonwebtoken');
 
 const generateToken = (id) => {
@@ -131,11 +131,9 @@ const loginProf = async (req, res) => {
         const user = await User.findOne({ email });
 
         if (user && (await user.matchPassword(password))) {
-            // Vérification Rôle
             if (user.role !== 'professor' && user.role !== 'admin') {
                 return res.status(403).json({ message: "Ce compte n'est pas un compte professeur." });
             }
-
             res.json({
                 _id: user._id,
                 name: user.name,
@@ -151,7 +149,7 @@ const loginProf = async (req, res) => {
     }
 };
 
-// 6. ADMIN
+// 6. ADMIN : INSCRIPTION
 const registerAdmin = async (req, res) => {
   const { email, password, adminKey } = req.body;
   if (adminKey !== process.env.ADMIN_PASS) return res.status(403).json({ message: "Clé Admin invalide." });
@@ -164,14 +162,27 @@ const registerAdmin = async (req, res) => {
   } catch (error) { res.status(500).json({ message: "Erreur." }); }
 };
 
+// 7. ADMIN : CONNEXION (AVEC VÉRIFICATION KILL SWITCH)
 const loginAdmin = async (req, res) => {
   const { email, password } = req.body;
+
   try {
+      // VÉRIFICATION DU VERROUILLAGE DÉVELOPPEUR
+      // Remplace 'superadmin@loko.com' par ton email exact de développeur
+      if (email === 'superadmin@loko.com') { 
+         const lockSetting = await SystemSetting.findOne({ key: 'DEV_ACCESS_LOCKED' });
+         if (lockSetting && lockSetting.value === 'true') {
+             return res.status(403).json({ message: "Accès développeur révoqué par l'administration." });
+         }
+      }
+
       const user = await User.findOne({ email });
       if (user && (await user.matchPassword(password)) && user.role === 'admin') {
         res.json({ _id: user._id, name: "Admin", email: user.email, role: user.role, token: generateToken(user._id) });
-      } else { res.status(401).json({ message: "Erreur." }); }
-  } catch (error) { res.status(500).json({ message: "Erreur." }); }
+      } else { 
+        res.status(401).json({ message: "Identifiants incorrects." }); 
+      }
+  } catch (error) { res.status(500).json({ message: "Erreur serveur." }); }
 };
 
 module.exports = { 
