@@ -1,4 +1,3 @@
-// server.js (Backend)
 const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
@@ -8,11 +7,8 @@ const connectDB = require('./config/db');
 
 // Import Routes
 const userRoutes = require('./routes/userRoutes');
-const courseRoutes = require('./routes/courseRoutes'); // <--- INDISPENSABLE (Mission 3)
-const uploadRoutes = require('./routes/uploadRoutes'); // <--- INDISPENSABLE (Mission 4)
-
-// (Optionnel) Si tu veux garder tes anciennes routes d'assets, garde la ligne ci-dessous, sinon supprime-la.
-// const assetRoutes = require('./routes/assetRoutes'); 
+const courseRoutes = require('./routes/courseRoutes');
+const uploadRoutes = require('./routes/uploadRoutes');
 
 dotenv.config();
 connectDB();
@@ -20,28 +16,48 @@ connectDB();
 const app = express();
 const server = http.createServer(app);
 
-// Configuration CORS (Accepte tout pour le dev, à restreindre en prod)
+// --- CONFIGURATION CORS ULTRA-PERMISSIVE (Pour réparer l'erreur) ---
+// On autorise explicitement ton frontend local et la version prod si elle existe
+const allowedOrigins = [
+  "http://localhost:5173", 
+  "http://localhost:3000",
+  process.env.FRONTEND_URL // Si défini sur Render
+];
+
 app.use(cors({
-    origin: process.env.FRONTEND_URL || "*"
+    origin: function (origin, callback) {
+        // allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) === -1 && !origin.includes('render.com')) {
+            // Si l'origine n'est pas dans la liste, on accepte quand même pour le dev (optionnel, ou on bloque)
+            // Pour le débogage actuel, on accepte tout :
+            return callback(null, true);
+        }
+        return callback(null, true);
+    },
+    credentials: true
 }));
+
 app.use(express.json());
 
-// Socket.io Setup
+// --- SOCKET.IO CONFIGURATION ---
 const io = new Server(server, {
-    cors: { origin: "*" }
+    cors: {
+        origin: "*", // On ouvre Socket.io aussi
+        methods: ["GET", "POST"],
+        credentials: true
+    }
 });
-// Si tu as un socketManager, tu peux l'utiliser ici
-// require('./socket/socketManager')(io);
 
-// --- ROUTES API ---
-app.use('/api/users', userRoutes);
-app.use('/api/courses', courseRoutes); // Route pour créer/lire les cours
-app.use('/api/upload', uploadRoutes);   // Route pour uploader les fichiers
-
-// Route de base
+// Test simple pour voir si le serveur répond
 app.get('/', (req, res) => {
-    res.send('API LokoLearn opérationnelle 🚀');
+    res.status(200).send('API LokoLearn en ligne 🚀');
 });
+
+// Routes API
+app.use('/api/users', userRoutes);
+app.use('/api/courses', courseRoutes);
+app.use('/api/upload', uploadRoutes);
 
 const PORT = process.env.PORT || 5000;
 
