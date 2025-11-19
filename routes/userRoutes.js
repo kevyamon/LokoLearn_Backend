@@ -4,16 +4,18 @@ const router = express.Router();
 const { 
   checkMatricule, 
   registerStudent, 
-  loginStudent 
+  loginStudent,
+  registerAdmin,
+  loginAdmin
 } = require('../controllers/userController');
 
-// Route pour vérifier l'état du matricule (Existe ou pas ?)
+// Routes Étudiant
 router.post('/check', checkMatricule);
-
-// Route pour créer le compte (Premier login)
 router.post('/register', registerStudent);
-
-// Route pour se connecter (Retours suivants)
 router.post('/login', loginStudent);
+
+// Routes Admin (Cachées)
+router.post('/admin/register', registerAdmin);
+router.post('/admin/login', loginAdmin);
 
 module.exports = router;
