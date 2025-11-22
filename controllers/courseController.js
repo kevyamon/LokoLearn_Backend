@@ -1,8 +1,7 @@
 // kevyamon/lokolearn_backend/LokoLearn_Backend-80d946f165c0cfa3aca77a220fc2a35a52f497cd/controllers/courseController.js
 const Course = require('../models/Course');
-// On n'a plus besoin d'importer Subject et Filiere ici pour la création
 
-// @desc    Créer un nouveau cours
+// 1. CRÉER UN COURS
 const createCourse = async (req, res) => {
   try {
     const { 
@@ -10,7 +9,6 @@ const createCourse = async (req, res) => {
       level, type, fileUrl, fileType, fileSize 
     } = req.body;
 
-    // Validation simple
     if (!title || !subject || !filiere || !fileUrl) {
       return res.status(400).json({ message: 'Champs obligatoires manquants.' });
     }
@@ -24,27 +22,21 @@ const createCourse = async (req, res) => {
     res.status(201).json(course);
   } catch (error) {
     console.error("Erreur création cours:", error);
-    res.status(500).json({ message: 'Erreur serveur lors de la création du cours.' });
+    res.status(500).json({ message: 'Erreur serveur.' });
   }
 };
 
-// @desc    Récupérer les cours (Avec Filtres)
+// 2. LIRE LES COURS (Public + Filtres)
 const getCourses = async (req, res) => {
   try {
     const { level, subject, filiere } = req.query;
-    
-    // Construction dynamique du filtre
     let query = {};
     if (level) query.level = level;
-    
-    // Filtres souples (recherche partielle insensible à la casse si nécessaire)
-    // Pour l'instant on fait une égalité stricte, mais comme c'est du texte, c'est simple
     if (subject) query.subject = subject;
     if (filiere) query.filiere = filiere;
 
     const courses = await Course.find(query)
-      .populate('author', 'name') // On récupère juste le nom du prof
-      // .populate('subject') -> RETIRÉ car subject est maintenant un String
+      .populate('author', 'name')
       .sort({ createdAt: -1 });
 
     res.json(courses);
@@ -54,14 +46,77 @@ const getCourses = async (req, res) => {
   }
 };
 
-// @desc    Données pour le formulaire (Optionnel maintenant qu'on est en texte libre)
-const getCourseFormData = async (req, res) => {
-    // On garde cette fonction vide ou basique pour ne pas casser les appels existants
-    // Mais le frontend n'utilise plus vraiment ces listes pour l'instant
-    res.json({ filieres: [], subjects: [] });
+// 3. STATS PROF + LISTE COMPLÈTE (Privé)
+const getProfStats = async (req, res) => {
+  try {
+    // On récupère TOUS les cours du prof connecté
+    const myCourses = await Course.find({ author: req.user._id }).sort({ createdAt: -1 });
+    
+    const totalCourses = myCourses.length;
+    const totalViews = myCourses.reduce((acc, curr) => acc + (curr.views || 0), 0);
+    const totalDownloads = myCourses.reduce((acc, curr) => acc + (curr.downloads || 0), 0);
+
+    res.json({
+      totalCourses,
+      totalViews,
+      totalDownloads,
+      allCourses: myCourses, // On renvoie la liste complète ici
+      recentCourses: myCourses.slice(0, 5) // Et les 5 derniers pour le dashboard
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur stats.' });
+  }
 };
 
-// @desc    Incrémenter vue/download
+// 4. MODIFIER UN COURS (NOUVEAU)
+const updateCourse = async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.id);
+
+    if (!course) return res.status(404).json({ message: "Cours introuvable." });
+
+    // Vérifier que c'est bien le prof propriétaire
+    if (course.author.toString() !== req.user._id.toString()) {
+        return res.status(401).json({ message: "Non autorisé." });
+    }
+
+    // Mise à jour (On ne touche pas au fichier pour l'instant, juste les infos)
+    course.title = req.body.title || course.title;
+    course.description = req.body.description || course.description;
+    course.subject = req.body.subject || course.subject;
+    course.level = req.body.level || course.level;
+
+    const updatedCourse = await course.save();
+    res.json(updatedCourse);
+
+  } catch (error) {
+    res.status(500).json({ message: "Erreur modification." });
+  }
+};
+
+// 5. SUPPRIMER UN COURS (NOUVEAU)
+const deleteCourse = async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.id);
+
+    if (!course) return res.status(404).json({ message: "Cours introuvable." });
+
+    // Vérifier que c'est bien le prof propriétaire
+    if (course.author.toString() !== req.user._id.toString()) {
+        return res.status(401).json({ message: "Non autorisé." });
+    }
+
+    // Suppression physique
+    await course.deleteOne();
+    res.json({ message: "Cours supprimé avec succès." });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Erreur suppression." });
+  }
+};
+
+// 6. COMPTEUR VUES
 const incrementView = async (req, res) => {
   try {
     const course = await Course.findByIdAndUpdate(
@@ -75,30 +130,13 @@ const incrementView = async (req, res) => {
   }
 };
 
-// @desc    Stats Prof
-const getProfStats = async (req, res) => {
-  try {
-    const myCourses = await Course.find({ author: req.user._id }).sort({ createdAt: -1 });
-    
-    const totalCourses = myCourses.length;
-    const totalViews = myCourses.reduce((acc, curr) => acc + (curr.views || 0), 0);
-    const totalDownloads = myCourses.reduce((acc, curr) => acc + (curr.downloads || 0), 0);
-
-    res.json({
-      totalCourses,
-      totalViews,
-      totalDownloads,
-      recentCourses: myCourses.slice(0, 5)
-    });
-  } catch (error) {
-    res.status(500).json({ message: 'Erreur stats.' });
-  }
+// 7. DATA FORMULAIRE
+const getCourseFormData = async (req, res) => {
+    res.json({ filieres: [], subjects: [] });
 };
 
 module.exports = { 
-  createCourse, 
-  getCourses, 
-  incrementView, 
-  getCourseFormData,
-  getProfStats 
+  createCourse, getCourses, getProfStats, 
+  updateCourse, deleteCourse, // <-- Export des nouvelles fonctions
+  incrementView, getCourseFormData 
 };
