@@ -1,7 +1,6 @@
-// controllers/courseController.js
+// kevyamon/lokolearn_backend/LokoLearn_Backend-80d946f165c0cfa3aca77a220fc2a35a52f497cd/controllers/courseController.js
 const Course = require('../models/Course');
-const Subject = require('../models/Subject');
-const Filiere = require('../models/Filiere');
+// On n'a plus besoin d'importer Subject et Filiere ici pour la création
 
 // @desc    Créer un nouveau cours
 const createCourse = async (req, res) => {
@@ -11,6 +10,7 @@ const createCourse = async (req, res) => {
       level, type, fileUrl, fileType, fileSize 
     } = req.body;
 
+    // Validation simple
     if (!title || !subject || !filiere || !fileUrl) {
       return res.status(400).json({ message: 'Champs obligatoires manquants.' });
     }
@@ -23,13 +23,12 @@ const createCourse = async (req, res) => {
 
     res.status(201).json(course);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Erreur serveur.' });
+    console.error("Erreur création cours:", error);
+    res.status(500).json({ message: 'Erreur serveur lors de la création du cours.' });
   }
 };
 
-// @desc    Récupérer les cours (Avec Filtres Intelligents)
-// @route   GET /api/courses?level=L1&subject=...
+// @desc    Récupérer les cours (Avec Filtres)
 const getCourses = async (req, res) => {
   try {
     const { level, subject, filiere } = req.query;
@@ -37,14 +36,16 @@ const getCourses = async (req, res) => {
     // Construction dynamique du filtre
     let query = {};
     if (level) query.level = level;
+    
+    // Filtres souples (recherche partielle insensible à la casse si nécessaire)
+    // Pour l'instant on fait une égalité stricte, mais comme c'est du texte, c'est simple
     if (subject) query.subject = subject;
     if (filiere) query.filiere = filiere;
 
-    // On récupère les cours + les infos de l'auteur et de la matière
     const courses = await Course.find(query)
-      .populate('author', 'name')
-      .populate('subject', 'name')
-      .sort({ createdAt: -1 }); // Les plus récents en premier
+      .populate('author', 'name') // On récupère juste le nom du prof
+      // .populate('subject') -> RETIRÉ car subject est maintenant un String
+      .sort({ createdAt: -1 });
 
     res.json(courses);
   } catch (error) {
@@ -53,13 +54,19 @@ const getCourses = async (req, res) => {
   }
 };
 
-// @desc    Incrémenter le compteur de vues/téléchargements
-// @route   PUT /api/courses/:id/view
+// @desc    Données pour le formulaire (Optionnel maintenant qu'on est en texte libre)
+const getCourseFormData = async (req, res) => {
+    // On garde cette fonction vide ou basique pour ne pas casser les appels existants
+    // Mais le frontend n'utilise plus vraiment ces listes pour l'instant
+    res.json({ filieres: [], subjects: [] });
+};
+
+// @desc    Incrémenter vue/download
 const incrementView = async (req, res) => {
   try {
     const course = await Course.findByIdAndUpdate(
       req.params.id,
-      { $inc: { views: 1, downloads: 1 } }, // On augmente les compteurs
+      { $inc: { views: 1, downloads: 1 } },
       { new: true }
     );
     res.json(course);
@@ -68,26 +75,12 @@ const incrementView = async (req, res) => {
   }
 };
 
-// @desc    Données pour le formulaire
-const getCourseFormData = async (req, res) => {
-  try {
-    const filieres = await Filiere.find({}).select('name _id type');
-    const subjects = await Subject.find({}).select('name _id hasTP filieres levels');
-    res.json({ filieres, subjects });
-  } catch (error) {
-    res.status(500).json({ message: 'Erreur chargement données.' });
-  }
-};
-
-// @desc    Statistiques pour le Professeur (Dashboard)
-// @route   GET /api/courses/my-stats
+// @desc    Stats Prof
 const getProfStats = async (req, res) => {
   try {
-    // On cherche tous les cours de ce prof
-    const myCourses = await Course.find({ author: req.user._id });
+    const myCourses = await Course.find({ author: req.user._id }).sort({ createdAt: -1 });
     
     const totalCourses = myCourses.length;
-    // On additionne les vues de tous les cours
     const totalViews = myCourses.reduce((acc, curr) => acc + (curr.views || 0), 0);
     const totalDownloads = myCourses.reduce((acc, curr) => acc + (curr.downloads || 0), 0);
 
@@ -95,7 +88,7 @@ const getProfStats = async (req, res) => {
       totalCourses,
       totalViews,
       totalDownloads,
-      recentCourses: myCourses.slice(0, 5) // Les 5 derniers
+      recentCourses: myCourses.slice(0, 5)
     });
   } catch (error) {
     res.status(500).json({ message: 'Erreur stats.' });

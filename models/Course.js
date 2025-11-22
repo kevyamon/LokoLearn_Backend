@@ -1,3 +1,4 @@
+// kevyamon/lokolearn_backend/LokoLearn_Backend-80d946f165c0cfa3aca77a220fc2a35a52f497cd/models/Course.js
 const mongoose = require('mongoose');
 
 const courseSchema = mongoose.Schema({
@@ -10,17 +11,18 @@ const courseSchema = mongoose.Schema({
     type: String,
   },
   
-  // Relations
+  // MODIFICATION CRITIQUE : On passe en String (Texte libre)
+  // car on a remplacé les IDs par des champs texte dans le frontend
   subject: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Subject',
+    type: String, 
     required: true
   },
   filiere: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Filiere',
+    type: String,
     required: true
   },
+  
+  // L'auteur reste une référence (ID) car c'est un utilisateur du système
   author: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -34,7 +36,7 @@ const courseSchema = mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['COURS', 'TP', 'TD', 'EXAMEN'], // Catégorie du document
+    enum: ['COURS', 'TP', 'TD', 'EXAMEN'], 
     default: 'COURS'
   },
 
@@ -44,14 +46,14 @@ const courseSchema = mongoose.Schema({
     required: true
   },
   fileType: {
-    type: String, // "pdf", "docx", "pptx"
+    type: String, 
     required: true
   },
   fileSize: {
-    type: String // "2.5 MB" (Pour info utilisateur)
+    type: String 
   },
 
-  // Stats & Gamification
+  // Stats
   downloads: {
     type: Number,
     default: 0
