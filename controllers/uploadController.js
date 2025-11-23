@@ -2,21 +2,38 @@
 const cloudinary = require('../config/cloudinary');
 const streamifier = require('streamifier');
 const BannerImage = require('../models/bannerImageModel');
+const path = require('path'); // Nécessaire pour récupérer l'extension
 
 // --- FONCTION UTILITAIRE D'UPLOAD ---
-const uploadToCloudinary = (buffer, folder, originalName) => {
+const uploadToCloudinary = (buffer, folder, originalName, mimeType) => {
   return new Promise((resolve, reject) => {
     
-    // Nettoyage du nom de fichier (pour éviter les 404/401 à cause des accents/espaces)
-    const cleanName = originalName.split('.')[0].replace(/[^a-zA-Z0-9]/g, "_");
+    // 1. Nettoyage du nom (On garde la base propre)
+    const nameWithoutExt = originalName.split('.')[0].replace(/[^a-zA-Z0-9]/g, "_");
+    const extension = path.extname(originalName); // ex: .pdf
+
+    // 2. STRATÉGIE ANTI-401 : Forcer le mode RAW pour les documents
+    // Cela contourne les sécurités d'image de Cloudinary
+    let resourceType = 'auto';
+    let publicId = nameWithoutExt + "_" + Date.now();
+
+    const isDocument = 
+        mimeType.includes('pdf') ||
+        mimeType.includes('msword') ||
+        mimeType.includes('office') || // docx, pptx, xlsx
+        mimeType.includes('presentation');
+
+    if (isDocument) {
+        resourceType = 'raw';
+        // IMPORTANT : En mode RAW, il faut ajouter l'extension manuellement au nom
+        publicId += extension; 
+    }
 
     const uploadStream = cloudinary.uploader.upload_stream(
       {
         folder: folder,
-        resource_type: 'auto', // Laisse Cloudinary décider (Raw pour docx, Image pour pdf)
-        public_id: cleanName + "_" + Date.now(), // Nom unique et propre
-        access_mode: 'public', // FORCE L'ACCÈS PUBLIC
-        type: 'upload' // Type standard
+        resource_type: resourceType, 
+        public_id: publicId,
       },
       (error, result) => {
         if (error) return reject(error);
@@ -32,12 +49,19 @@ const uploadFile = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: 'Aucun fichier fourni.' });
 
-    const result = await uploadToCloudinary(req.file.buffer, 'lokolearn_cours', req.file.originalname);
+    // On passe le mimetype pour décider si c'est RAW ou AUTO
+    const result = await uploadToCloudinary(
+        req.file.buffer, 
+        'lokolearn_cours', 
+        req.file.originalname, 
+        req.file.mimetype
+    );
 
     res.status(200).json({
-      url: result.secure_url, // L'URL HTTPS sécurisée
+      url: result.secure_url,
       public_id: result.public_id,
-      format: result.format || result.resource_type, // 'pdf', 'docx' ou 'raw'
+      // Si c'est raw, Cloudinary ne renvoie pas toujours le format, on l'extrait du fichier original
+      format: result.format || path.extname(req.file.originalname).replace('.', ''),
       bytes: result.bytes,
       original_filename: req.file.originalname
     });
@@ -52,7 +76,8 @@ const uploadBannerImage = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: 'Aucune image fournie.' });
 
-    const result = await uploadToCloudinary(req.file.buffer, 'lokolearn_banners', req.file.originalname);
+    // Les bannières sont toujours des images, donc on laisse 'auto' (qui détectera image)
+    const result = await uploadToCloudinary(req.file.buffer, 'lokolearn_banners', req.file.originalname, req.file.mimetype);
 
     const newBanner = await BannerImage.create({
       imageUrl: result.secure_url,
@@ -82,6 +107,8 @@ const deleteBannerImage = async (req, res) => {
     const image = await BannerImage.findById(req.params.id);
     if (!image) return res.status(404).json({ message: "Image non trouvée." });
 
+    // Attention : pour supprimer, il faut préciser le resource_type si c'était pas 'image'
+    // Mais ici les bannières sont toujours des images.
     await cloudinary.uploader.destroy(image.publicId);
     await BannerImage.findByIdAndDelete(req.params.id);
 
