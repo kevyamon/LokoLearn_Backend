@@ -2,31 +2,27 @@
 const cloudinary = require('../config/cloudinary');
 const streamifier = require('streamifier');
 const BannerImage = require('../models/bannerImageModel');
-const path = require('path'); // Nécessaire pour récupérer l'extension
+const path = require('path');
 
-// --- FONCTION UTILITAIRE D'UPLOAD ---
 const uploadToCloudinary = (buffer, folder, originalName, mimeType) => {
   return new Promise((resolve, reject) => {
     
-    // 1. Nettoyage du nom (On garde la base propre)
     const nameWithoutExt = originalName.split('.')[0].replace(/[^a-zA-Z0-9]/g, "_");
-    const extension = path.extname(originalName); // ex: .pdf
+    const extension = path.extname(originalName).toLowerCase(); // .pdf
 
-    // 2. STRATÉGIE ANTI-401 : Forcer le mode RAW pour les documents
-    // Cela contourne les sécurités d'image de Cloudinary
     let resourceType = 'auto';
     let publicId = nameWithoutExt + "_" + Date.now();
 
+    // DÉTECTION RENFORCÉE : MIME OU EXTENSION
     const isDocument = 
-        mimeType.includes('pdf') ||
-        mimeType.includes('msword') ||
-        mimeType.includes('office') || // docx, pptx, xlsx
-        mimeType.includes('presentation');
+        mimeType.includes('pdf') || extension === '.pdf' ||
+        mimeType.includes('msword') || extension === '.doc' ||
+        mimeType.includes('office') || extension === '.docx' ||
+        mimeType.includes('presentation') || extension === '.pptx' || extension === '.ppt';
 
     if (isDocument) {
-        resourceType = 'raw';
-        // IMPORTANT : En mode RAW, il faut ajouter l'extension manuellement au nom
-        publicId += extension; 
+        resourceType = 'raw'; // FORCE LE MODE BRUT (PUBLIC)
+        publicId += extension; // Ajoute l'extension pour que le fichier soit lisible
     }
 
     const uploadStream = cloudinary.uploader.upload_stream(
@@ -34,6 +30,7 @@ const uploadToCloudinary = (buffer, folder, originalName, mimeType) => {
         folder: folder,
         resource_type: resourceType, 
         public_id: publicId,
+        access_mode: 'public' // FORCE PUBLIC
       },
       (error, result) => {
         if (error) return reject(error);
@@ -44,12 +41,11 @@ const uploadToCloudinary = (buffer, folder, originalName, mimeType) => {
   });
 };
 
-// 1. UPLOAD COURS (Prof)
+// 1. UPLOAD COURS
 const uploadFile = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: 'Aucun fichier fourni.' });
 
-    // On passe le mimetype pour décider si c'est RAW ou AUTO
     const result = await uploadToCloudinary(
         req.file.buffer, 
         'lokolearn_cours', 
@@ -60,68 +56,48 @@ const uploadFile = async (req, res) => {
     res.status(200).json({
       url: result.secure_url,
       public_id: result.public_id,
-      // Si c'est raw, Cloudinary ne renvoie pas toujours le format, on l'extrait du fichier original
       format: result.format || path.extname(req.file.originalname).replace('.', ''),
       bytes: result.bytes,
       original_filename: req.file.originalname
     });
   } catch (error) {
-    console.error("Erreur Upload Cloudinary:", error);
-    res.status(500).json({ message: "Erreur upload vers le serveur de fichiers." });
+    console.error("Erreur Upload:", error);
+    res.status(500).json({ message: "Erreur upload." });
   }
 };
 
-// 2. UPLOAD BANNIÈRE (Admin)
+// 2. UPLOAD BANNIÈRE
 const uploadBannerImage = async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ message: 'Aucune image fournie.' });
+    if (!req.file) return res.status(400).json({ message: 'Aucune image.' });
 
-    // Les bannières sont toujours des images, donc on laisse 'auto' (qui détectera image)
     const result = await uploadToCloudinary(req.file.buffer, 'lokolearn_banners', req.file.originalname, req.file.mimetype);
 
     const newBanner = await BannerImage.create({
       imageUrl: result.secure_url,
       publicId: result.public_id,
     });
-
     res.status(201).json(newBanner);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Erreur upload bannière." });
-  }
+  } catch (error) { res.status(500).json({ message: "Erreur upload bannière." }); }
 };
 
-// 3. RÉCUPÉRER LES BANNIÈRES
+// 3. GET BANNIÈRE
 const getBannerImages = async (req, res) => {
   try {
     const images = await BannerImage.find().sort({ createdAt: -1 });
     res.json(images);
-  } catch (error) {
-    res.status(500).json({ message: "Erreur récupération bannières." });
-  }
+  } catch (error) { res.status(500).json({ message: "Erreur." }); }
 };
 
-// 4. SUPPRIMER UNE BANNIÈRE
+// 4. DELETE BANNIÈRE
 const deleteBannerImage = async (req, res) => {
   try {
     const image = await BannerImage.findById(req.params.id);
-    if (!image) return res.status(404).json({ message: "Image non trouvée." });
-
-    // Attention : pour supprimer, il faut préciser le resource_type si c'était pas 'image'
-    // Mais ici les bannières sont toujours des images.
+    if (!image) return res.status(404).json({ message: "Non trouvé." });
     await cloudinary.uploader.destroy(image.publicId);
     await BannerImage.findByIdAndDelete(req.params.id);
-
-    res.json({ message: "Image supprimée." });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Erreur suppression." });
-  }
+    res.json({ message: "Supprimé." });
+  } catch (error) { res.status(500).json({ message: "Erreur." }); }
 };
 
-module.exports = { 
-  uploadFile, 
-  uploadBannerImage, 
-  getBannerImages, 
-  deleteBannerImage 
-};
+module.exports = { uploadFile, uploadBannerImage, getBannerImages, deleteBannerImage };
