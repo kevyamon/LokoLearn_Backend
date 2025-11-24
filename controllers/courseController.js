@@ -1,4 +1,4 @@
-// kevyamon/lokolearn_backend/LokoLearn_Backend-80d9484a9bb9f7486f42e850171b4ef1b25f0389/controllers/courseController.js
+// kevyamon/lokolearn_backend/LokoLearn_Backend-80d946f165c0cfa3aca77a220fc2a35a52f497cd/controllers/courseController.js
 const Course = require('../models/Course');
 const cloudinary = require('../config/cloudinary');
 
@@ -85,27 +85,27 @@ const getSignedFileUrl = async (req, res) => {
 
     fileIdentifier = course.fileUrl.substring(uploadIndex + 8); 
     
-    // LOG CRITIQUE (temporaire)
+    // LOG TEMPORAIRE (à enlever après validation)
     console.log("--- DEBUG CLOUDINARY SIGNATURE ---");
     console.log("Course File URL:", course.fileUrl);
     console.log("Extracted File Identifier (Path for signing):", fileIdentifier);
     console.log("Resource Type for Signature:", 'raw');
     console.log("---------------------------------");
     
-    // CHANGEMENT CRITIQUE : Remplacement de signed_download_url par download_url
-    // qui est la méthode standard dans la v2 du SDK pour générer des URL privées/signées.
+    // CHANGEMENT CRITIQUE : Suppression de type: 'authenticated'
     const signedUrl = cloudinary.utils.download_url(fileIdentifier, {
         expires_at: Math.floor(Date.now() / 1000) + (60 * 60), 
         resource_type: 'raw',
-        type: 'authenticated' // On force le type pour s'assurer que la signature fonctionne.
+        // type: 'authenticated' <--- RETIRÉ ! C'était la cause du conflit de signature.
     });
 
     res.json({ signedUrl });
 
   } catch (error) {
-    console.error("Erreur après vérification du Secret:", error);
+    console.error("Erreur de la fonction download_url:", error);
+    // On met le message original si on a un problème non identifié
     res.status(500).json({ 
-        message: 'Échec interne de la signature. La fonction download_url a peut-être échoué.' 
+        message: 'Échec de la signature. La fonction download_url a peut-être échoué.' 
     });
   }
 };
