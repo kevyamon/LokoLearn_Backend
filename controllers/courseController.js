@@ -1,12 +1,11 @@
-// kevyamon/lokolearn_backend/LokoLearn_Backend-80d946f165c0cfa3aca77a220fc2a35a52f497cd/controllers/courseController.js
+// kevyamon/lokolearn_backend/LokoLearn_Backend-a0fd204aec523b4df8e33ff9859b4f62884cac3e/controllers/courseController.js
 const Course = require('../models/Course');
+// IMPORT DU SERVICE CLOUDINARY
+const cloudinary = require('../config/cloudinary');
 
 // Fonction utilitaire pour "Nettoyer" le nom (Normalisation)
 const normalizeSubjectName = (name) => {
   if (!name) return '';
-  // 1. Enlever les espaces avant/après
-  // 2. Tout mettre en minuscule
-  // 3. Mettre la première lettre en majuscule
   const trimmed = name.trim().toLowerCase();
   return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
 };
@@ -23,18 +22,16 @@ const createCourse = async (req, res) => {
       return res.status(400).json({ message: 'Champs obligatoires manquants.' });
     }
 
-    // ICI LA MAGIE : On nettoie le nom de la matière avant d'enregistrer
-    // Ex: "  microBIOlogie " devient "Microbiologie"
     const cleanSubject = normalizeSubjectName(subject);
 
     const course = await Course.create({
       title, 
       description, 
-      subject: cleanSubject, // On enregistre la version propre
+      subject: cleanSubject, 
       filiere, 
       level, 
       type, 
-      fileUrl, 
+      fileUrl, // L'URL non-signée est stockée ici
       fileType, 
       fileSize,
       author: req.user._id
@@ -47,6 +44,8 @@ const createCourse = async (req, res) => {
   }
 };
 
+// ... Les fonctions getCourses, getProfStats, updateCourse, deleteCourse, getCourseFormData restent inchangées ...
+
 // 2. LIRE LES COURS
 const getCourses = async (req, res) => {
   try {
@@ -56,7 +55,6 @@ const getCourses = async (req, res) => {
     if (level) query.level = level;
     if (filiere) query.filiere = filiere;
     
-    // Si on cherche par sujet, on nettoie aussi la requête pour être sûr de trouver
     if (subject) query.subject = normalizeSubjectName(subject);
 
     const courses = await Course.find(query)
@@ -70,8 +68,41 @@ const getCourses = async (req, res) => {
   }
 };
 
-// ... (Le reste du fichier : getProfStats, updateCourse, deleteCourse, incrementView, getCourseFormData reste identique)
-// Je te remets les autres fonctions pour que le copier-coller soit complet sans erreur
+// 3. GÉNÉRER UNE URL SIGNÉE POUR LE TÉLÉCHARGEMENT (NOUVEAU)
+const getSignedFileUrl = async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.id);
+
+    if (!course) {
+      return res.status(404).json({ message: "Cours introuvable." });
+    }
+
+    // Le backend doit déterminer le chemin exact du fichier sur Cloudinary
+    // On extrait le Public ID et le chemin à partir de l'URL brute.
+    // L'URL brute est de la forme: /upload/v<version>/lokolearn_cours/<public_id>
+    
+    const urlParts = course.fileUrl.split('/upload/');
+    if (urlParts.length < 2) {
+        return res.status(500).json({ message: "URL Cloudinary invalide." });
+    }
+
+    // On reconstruit le chemin de transformation avec l'extension
+    const fileIdentifier = 'upload/' + urlParts[1];
+    
+    // Génération de l'URL signée (valide pour 1 heure, par exemple)
+    const signedUrl = cloudinary.utils.signed_download_url(fileIdentifier, {
+        expires_at: Math.floor(Date.now() / 1000) + (60 * 60) // Expire dans 1 heure
+    });
+
+    // Redirection immédiate vers l'URL Cloudinary signée
+    res.json({ signedUrl });
+
+  } catch (error) {
+    console.error("Erreur génération URL signée:", error);
+    res.status(500).json({ message: 'Erreur lors de la signature du lien de téléchargement.' });
+  }
+};
+
 
 const getProfStats = async (req, res) => {
   try {
@@ -95,7 +126,6 @@ const updateCourse = async (req, res) => {
 
     course.title = req.body.title || course.title;
     course.description = req.body.description || course.description;
-    // On nettoie aussi si on modifie le sujet
     if (req.body.subject) course.subject = normalizeSubjectName(req.body.subject);
     course.level = req.body.level || course.level;
 
@@ -126,5 +156,5 @@ const incrementView = async (req, res) => {
 const getCourseFormData = async (req, res) => { res.json({ filieres: [], subjects: [] }); };
 
 module.exports = { 
-  createCourse, getCourses, getProfStats, updateCourse, deleteCourse, incrementView, getCourseFormData 
+  createCourse, getCourses, getProfStats, updateCourse, deleteCourse, incrementView, getCourseFormData, getSignedFileUrl
 };

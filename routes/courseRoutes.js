@@ -7,8 +7,9 @@ const {
   getCourseFormData, 
   incrementView,
   getProfStats,
-  updateCourse, // Import
-  deleteCourse  // Import
+  updateCourse,
+  deleteCourse,
+  getSignedFileUrl // <-- NOUVEL IMPORT
 } = require('../controllers/courseController');
 const { protect, professor } = require('../middleware/authMiddleware');
 
@@ -16,12 +17,15 @@ const { protect, professor } = require('../middleware/authMiddleware');
 router.get('/', getCourses);
 router.put('/:id/view', incrementView);
 
+// Route pour le téléchargement signé (Accessible à tous les connectés)
+router.get('/:id/signed-url', protect, getSignedFileUrl); // <-- NOUVELLE ROUTE PROTÉGÉE
+
 // Protégé (Prof)
 router.get('/form-data', protect, getCourseFormData); 
 router.get('/my-stats', protect, professor, getProfStats);
 router.post('/', protect, professor, createCourse);
 
-// NOUVELLES ROUTES DE GESTION (Modification / Suppression)
+// Routes de Gestion (Modification / Suppression)
 router.route('/:id')
     .put(protect, professor, updateCourse)
     .delete(protect, professor, deleteCourse);
