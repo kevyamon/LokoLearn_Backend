@@ -1,4 +1,4 @@
-// kevyamon/lokolearn_backend/LokoLearn_Backend-80d946f165c0cfa3aca77a220fc2a35a52f497cd/controllers/uploadController.js
+// kevyamon/lokolearn_backend/LokoLearn_Backend-a0fd204aec523b4df8e33ff9859b4f62884cac3e/controllers/uploadController.js
 const cloudinary = require('../config/cloudinary');
 const streamifier = require('streamifier');
 const BannerImage = require('../models/bannerImageModel');
@@ -10,12 +10,15 @@ const uploadToCloudinary = (buffer, folder, originalName, mimeType) => {
     const nameWithoutExt = originalName.split('.')[0].replace(/[^a-zA-Z0-9]/g, "_");
     const extension = path.extname(originalName);
 
-    // PAR DÉFAUT : AUTO (Pour images, vidéos)
     let resourceType = 'auto'; 
     let publicId = nameWithoutExt + "_" + Date.now();
+    let options = {
+        folder: folder,
+        public_id: publicId,
+        type: 'upload', 
+    };
 
-    // SI C'EST UN DOCUMENT : ON FORCE LE MODE "RAW" (FICHIER BRUT)
-    // C'est le mode "Disque Dur en ligne", sans traitement d'image
+
     const isDocument = 
         mimeType.includes('pdf') || 
         mimeType.includes('word') || 
@@ -26,19 +29,23 @@ const uploadToCloudinary = (buffer, folder, originalName, mimeType) => {
 
     if (isDocument) {
         resourceType = 'raw';
-        // En mode RAW, Cloudinary a besoin de l'extension dans le nom
         publicId += extension; 
+        
+        // CORRECTION CRITIQUE : Assurer l'accès public pour les fichiers RAW
+        options.resource_type = 'raw';
+        options.public_id = publicId;
+        // Ceci rend le fichier accessible publiquement via l'URL simple
+        options.access_control = 'public'; 
+    } else {
+        // Pour les images/auto, on peut utiliser resource_type 'auto'
+        options.resource_type = 'auto';
+        options.public_id = publicId;
+        options.access_control = 'public'; 
     }
 
+
     const uploadStream = cloudinary.uploader.upload_stream(
-      {
-        folder: folder,
-        resource_type: resourceType,
-        public_id: publicId,
-        // TRES IMPORTANT : On force l'accès public
-        type: 'upload', 
-        access_mode: 'public'
-      },
+      options,
       (error, result) => {
         if (error) return reject(error);
         resolve(result);
@@ -61,9 +68,8 @@ const uploadFile = async (req, res) => {
     );
 
     res.status(200).json({
-      url: result.secure_url, // URL HTTPS
+      url: result.secure_url, 
       public_id: result.public_id,
-      // Si RAW, le format n'est pas toujours renvoyé, on le déduit
       format: result.format || path.extname(req.file.originalname).replace('.', ''),
       bytes: result.bytes,
       original_filename: req.file.originalname
@@ -78,10 +84,19 @@ const uploadFile = async (req, res) => {
 const uploadBannerImage = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: 'Aucune image.' });
-    const result = await uploadToCloudinary(req.file.buffer, 'lokolearn_banners', req.file.originalname, req.file.mimetype);
+    // Pour les images de bannière, on veut qu'elles soient publiques
+    const result = await uploadToCloudinary(
+        req.file.buffer, 
+        'lokolearn_banners', 
+        req.file.originalname, 
+        req.file.mimetype
+    );
     const newBanner = await BannerImage.create({ imageUrl: result.secure_url, publicId: result.public_id });
     res.status(201).json(newBanner);
-  } catch (error) { res.status(500).json({ message: "Erreur." }); }
+  } catch (error) { 
+    console.error("Erreur uploadBannerImage:", error);
+    res.status(500).json({ message: "Erreur." }); 
+  }
 };
 
 const getBannerImages = async (req, res) => {
@@ -92,7 +107,8 @@ const deleteBannerImage = async (req, res) => {
   try {
     const image = await BannerImage.findById(req.params.id);
     if (!image) return res.status(404).json({ message: "Non trouvé." });
-    await cloudinary.uploader.destroy(image.publicId);
+    // On détruit l'image selon son type (toujours 'image' pour la bannière)
+    await cloudinary.uploader.destroy(image.publicId, { resource_type: 'image' });
     await BannerImage.findByIdAndDelete(req.params.id);
     res.json({ message: "Supprimé." });
   } catch (error) { res.status(500).json({ message: "Erreur." }); }
