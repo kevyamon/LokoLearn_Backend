@@ -65,7 +65,7 @@ const getCourses = async (req, res) => {
   }
 };
 
-// 3. GÉNÉRER UNE URL SIGNÉE POUR LE TÉLÉCHARGEMENT (CORRECTION FINALISEE)
+// 3. GÉNÉRER UNE URL SIGNÉE POUR LE TÉLÉCHARGEMENT (ULTIME CORRECTION)
 const getSignedFileUrl = async (req, res) => {
   try {
     const course = await Course.findById(req.params.id);
@@ -74,37 +74,41 @@ const getSignedFileUrl = async (req, res) => {
       return res.status(404).json({ message: "Cours introuvable." });
     }
 
-    // Extraction robuste du public ID
-    let fileIdentifier;
-    const uploadIndex = course.fileUrl.indexOf('/upload/');
-    
-    if (uploadIndex === -1) {
-        console.error("DEBUG CLOUDINARY: Séparateur /upload/ non trouvé.");
-        return res.status(500).json({ message: "URL Cloudinary invalide (séparateur d'upload manquant)." });
-    }
+    // Extraction du Public ID SANS la version (v<...>) et SANS le type (raw/upload)
+    // Cloudinary SDK préfère souvent l'identifiant simple pour le builder d'URL
+    const parts = course.fileUrl.split('/');
+    // L'ID du fichier est le dernier élément, y compris le dossier si présent
+    const fullPublicId = parts.slice(parts.indexOf('lokolearn_cours') - 1).join('/');
 
-    fileIdentifier = course.fileUrl.substring(uploadIndex + 8); 
-    
-    // LOG TEMPORAIRE (à enlever après validation)
-    console.log("--- DEBUG CLOUDINARY SIGNATURE (TENTATIVE 5) ---");
-    console.log("Course File URL:", course.fileUrl);
-    console.log("Extracted File Identifier (Path for signing):", fileIdentifier);
-    console.log("Options: expires_at, NO resource_type"); // Changement pour le log
-    console.log("---------------------------------");
-    
-    // CHANGEMENT CRITIQUE : Suppression de resource_type: 'raw'
-    // C'est l'appel de signature le plus simple et le plus compatible avec les fichiers 'upload'
-    const signedUrl = cloudinary.utils.download_url(fileIdentifier, {
-        expires_at: Math.floor(Date.now() / 1000) + (60 * 60), 
-        // Laisse Cloudinary deviner le type de ressource, ce qui est possible via le chemin d'accès.
+    // Nettoyage de l'extension pour le public ID (si on utilise le builder de base)
+    // On retire l'extension car le builder la gère.
+    const publicIdWithoutExtension = course.fileUrl.substring(
+        course.fileUrl.lastIndexOf('/') + 1, 
+        course.fileUrl.lastIndexOf('.')
+    );
+
+    // 🏆 Solution ultime : utiliser cloudinary.url() avec le type 'authenticated' et l'extension.
+    // Cette fonction est le moyen le plus direct de construire une URL signée.
+    const signedUrl = cloudinary.url(publicIdWithoutExtension, {
+        resource_type: 'raw', // On garde 'raw'
+        type: 'authenticated', // On force le type 'authenticated' pour que la signature soit incluse
+        format: course.fileType, // On inclut le format (pdf)
+        expires_at: Math.floor(Date.now() / 1000) + (60 * 60)
     });
 
+    // LOGS DE VÉRIFICATION
+    console.log("--- DEBUG CLOUDINARY SIGNATURE (ULTIME) ---");
+    console.log("Public ID pour signature:", publicIdWithoutExtension);
+    console.log("URL Signée Finale:", signedUrl);
+    console.log("---------------------------------");
+    
     res.json({ signedUrl });
 
   } catch (error) {
-    console.error("Erreur de la fonction download_url:", error);
+    console.error("Erreur critique de la fonction cloudinary.url():", error);
+    // On prévient que le problème est très profond maintenant
     res.status(500).json({ 
-        message: 'Échec de la signature. La fonction download_url a peut-être échoué.' 
+        message: 'Échec irréversible de la signature Cloudinary. Veuillez vérifier la configuration de sécurité stricte de votre compte Cloudinary.' 
     });
   }
 };
