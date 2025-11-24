@@ -10,4 +10,13 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
+// 🛑 LOG TEMPORAIRE CRITIQUE 🛑
+console.log("CLOUDINARY CONFIG LOADED. CHECKING SECRET STATUS:");
+// N'affiche pas la clé complète, mais vérifie si elle existe et a une bonne longueur
+const secretStatus = process.env.CLOUDINARY_API_SECRET ? 
+    `Secret loaded. Length: ${process.env.CLOUDINARY_API_SECRET.length} chars` : 
+    "🚨 SECRET IS EMPTY OR UNDEFINED 🚨";
+console.log(secretStatus);
+// 🛑 FIN DU LOG TEMPORAIRE 🛑
+
 module.exports = cloudinary;

@@ -1,6 +1,6 @@
 // kevyamon/lokolearn_backend/LokoLearn_Backend-80d946f165c0cfa3aca77a220fc2a35a52f497cd/controllers/courseController.js
 const Course = require('../models/Course');
-const cloudinary = require('../config/cloudinary'); // IMPORT CLOUDINARY
+const cloudinary = require('../config/cloudinary');
 
 // Fonction utilitaire pour "Nettoyer" le nom (Normalisation)
 const normalizeSubjectName = (name) => {
@@ -30,7 +30,7 @@ const createCourse = async (req, res) => {
       filiere, 
       level, 
       type, 
-      fileUrl,
+      fileUrl, 
       fileType, 
       fileSize,
       author: req.user._id
@@ -43,7 +43,7 @@ const createCourse = async (req, res) => {
   }
 };
 
-// 2. LIRE LES COURS (inchangé)
+// 2. LIRE LES COURS
 const getCourses = async (req, res) => {
   try {
     const { level, subject, filiere } = req.query;
@@ -65,7 +65,7 @@ const getCourses = async (req, res) => {
   }
 };
 
-// 3. GÉNÉRER UNE URL SIGNÉE POUR LE TÉLÉCHARGEMENT (CORRECTION)
+// 3. GÉNÉRER UNE URL SIGNÉE POUR LE TÉLÉCHARGEMENT (CORRECTION + DEBUG)
 const getSignedFileUrl = async (req, res) => {
   try {
     const course = await Course.findById(req.params.id);
@@ -75,46 +75,90 @@ const getSignedFileUrl = async (req, res) => {
     }
 
     // Extraction robuste du public ID
-    // 1. On cherche la partie de l'URL qui commence après 'upload/'
+    // L'URL est de la forme: https://res.cloudinary.com/<cloud_name>/raw/upload/v<version>/<file_identifier>
     const urlParts = course.fileUrl.split('/upload/');
     if (urlParts.length < 2) {
+        // Log d'erreur si l'URL ne contient pas le format attendu
+        console.error("DEBUG CLOUDINARY: URL Cloudinary invalide: ", course.fileUrl);
         return res.status(500).json({ message: "URL Cloudinary invalide (Format attendu non trouvé)." });
     }
 
-    // Le 'fileIdentifier' doit inclure le chemin complet après /upload/ (y compris le v<version>/)
+    // Le 'fileIdentifier' est la partie après '/upload/'
     const fileIdentifier = urlParts[1]; 
     
-    // On doit s'assurer qu'il s'agit d'un fichier 'raw' pour les signatures de téléchargement de documents
+    // 🛑 LOG CRITIQUE 🛑
+    console.log("--- DEBUG CLOUDINARY SIGNATURE ---");
+    console.log("Course File URL:", course.fileUrl);
+    console.log("Extracted File Identifier (Path for signing):", fileIdentifier);
+    console.log("Resource Type for Signature:", 'raw');
+    console.log("Timestamp for expiration:", Math.floor(Date.now() / 1000) + (60 * 60));
+    console.log("---------------------------------");
+    // 🛑 FIN DU LOG CRITIQUE 🛑
+
     const signedUrl = cloudinary.utils.signed_download_url(fileIdentifier, {
         expires_at: Math.floor(Date.now() / 1000) + (60 * 60), // Valide 1 heure
-        resource_type: 'raw' // CRITIQUE pour que la signature soit appliquée au bon type de fichier
+        resource_type: 'raw' // CRITIQUE
     });
 
     res.json({ signedUrl });
 
   } catch (error) {
     console.error("Erreur génération URL signée:", error);
-    // On renvoie un message générique si l'erreur vient d'un mauvais secret (500)
-    res.status(500).json({ message: 'Erreur serveur lors de la tentative de signature. Vérifiez votre API_SECRET Cloudinary.' });
+    // On renvoie un message plus précis
+    res.status(500).json({ 
+        message: 'Échec de la signature Cloudinary. Le problème est l’API Secret ou le chemin du fichier.' 
+    });
   }
 };
 
-// --- Les autres fonctions restent inchangées ---
 
 const getProfStats = async (req, res) => {
-// ... (reste du code inchangé)
+  try {
+    const myCourses = await Course.find({ author: req.user._id }).sort({ createdAt: -1 });
+    const totalCourses = myCourses.length;
+    const totalViews = myCourses.reduce((acc, curr) => acc + (curr.views || 0), 0);
+    const totalDownloads = myCourses.reduce((acc, curr) => acc + (curr.downloads || 0), 0);
+
+    res.json({
+      totalCourses, totalViews, totalDownloads,
+      allCourses: myCourses, recentCourses: myCourses.slice(0, 5)
+    });
+  } catch (error) { res.status(500).json({ message: 'Erreur stats.' }); }
 };
 
 const updateCourse = async (req, res) => {
-// ... (reste du code inchangé)
+  try {
+    const course = await Course.findById(req.params.id);
+    if (!course) return res.status(404).json({ message: "Cours introuvable." });
+    if (course.author.toString() !== req.user._id.toString()) return res.status(401).json({ message: "Non autorisé." });
+
+    course.title = req.body.title || course.title;
+    course.description = req.body.description || course.description;
+    if (req.body.subject) course.subject = normalizeSubjectName(req.body.subject);
+    course.level = req.body.level || course.level;
+
+    const updatedCourse = await course.save();
+    res.json(updatedCourse);
+  } catch (error) { res.status(500).json({ message: "Erreur modification." }); }
 };
 
 const deleteCourse = async (req, res) => {
-// ... (reste du code inchangé)
+  try {
+    const course = await Course.findById(req.params.id);
+    if (!course) return res.status(404).json({ message: "Cours introuvable." });
+    if (course.author.toString() !== req.user._id.toString()) return res.status(401).json({ message: "Non autorisé." });
+    await course.deleteOne();
+    res.json({ message: "Cours supprimé." });
+  } catch (error) { res.status(500).json({ message: "Erreur suppression." }); }
 };
 
 const incrementView = async (req, res) => {
-// ... (reste du code inchangé)
+  try {
+    const course = await Course.findByIdAndUpdate(
+      req.params.id, { $inc: { views: 1, downloads: 1 } }, { new: true }
+    );
+    res.json(course);
+  } catch (error) { res.status(500).json({ message: 'Erreur tracking.' }); }
 };
 
 const getCourseFormData = async (req, res) => { res.json({ filieres: [], subjects: [] }); };
