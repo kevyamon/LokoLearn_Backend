@@ -86,24 +86,23 @@ const getSignedFileUrl = async (req, res) => {
     fileIdentifier = course.fileUrl.substring(uploadIndex + 8); 
     
     // LOG TEMPORAIRE (à enlever après validation)
-    console.log("--- DEBUG CLOUDINARY SIGNATURE ---");
+    console.log("--- DEBUG CLOUDINARY SIGNATURE (TENTATIVE 5) ---");
     console.log("Course File URL:", course.fileUrl);
     console.log("Extracted File Identifier (Path for signing):", fileIdentifier);
-    console.log("Resource Type for Signature:", 'raw');
+    console.log("Options: expires_at, NO resource_type"); // Changement pour le log
     console.log("---------------------------------");
     
-    // CHANGEMENT CRITIQUE : Suppression de type: 'authenticated'
+    // CHANGEMENT CRITIQUE : Suppression de resource_type: 'raw'
+    // C'est l'appel de signature le plus simple et le plus compatible avec les fichiers 'upload'
     const signedUrl = cloudinary.utils.download_url(fileIdentifier, {
         expires_at: Math.floor(Date.now() / 1000) + (60 * 60), 
-        resource_type: 'raw',
-        // type: 'authenticated' <--- RETIRÉ ! C'était la cause du conflit de signature.
+        // Laisse Cloudinary deviner le type de ressource, ce qui est possible via le chemin d'accès.
     });
 
     res.json({ signedUrl });
 
   } catch (error) {
     console.error("Erreur de la fonction download_url:", error);
-    // On met le message original si on a un problème non identifié
     res.status(500).json({ 
         message: 'Échec de la signature. La fonction download_url a peut-être échoué.' 
     });
