@@ -16,7 +16,7 @@ const uploadToCloudinary = (buffer, folder, originalName, mimeType) => {
     let options = {
         folder: folder,
         public_id: publicId,
-        type: 'upload', // Ceci rend déjà le fichier public par défaut
+        type: 'upload', // Toujours 'upload' (public)
     };
 
     const isDocument = 
@@ -27,14 +27,17 @@ const uploadToCloudinary = (buffer, folder, originalName, mimeType) => {
         mimeType.includes('spreadsheet') ||
         extension === '.pdf' || extension === '.docx' || extension === '.pptx';
 
-    // CORRECTION POUR TÉLÉCHARGEMENT : Mode RAW pour les documents
+    // Correction pour TÉLÉCHARGEMENT (Issue 401) : 
+    // 1. Passage en 'raw'
+    // 2. Ajout de l'extension au public_id
+    // 3. Forcer le mode d'accès public via access_mode
     if (isDocument) {
-        // Pour les fichiers raw, il est crucial d'ajouter l'extension au public_id
-        // sinon le fichier téléchargé n'aura pas d'extension
         options.resource_type = 'raw';
-        options.public_id = publicId + extension; 
+        options.public_id = publicId + extension;
+        // CORRECTION CRITIQUE 401: On force l'accès public pour les fichiers RAW
+        options.access_mode = 'public'; 
     } else {
-        // Pour les images
+        // Pour les images/auto (bannières)
         options.resource_type = 'auto';
     }
 
