@@ -10,14 +10,14 @@ const uploadToCloudinary = (buffer, folder, originalName, mimeType) => {
     const nameWithoutExt = originalName.split('.')[0].replace(/[^a-zA-Z0-9]/g, "_");
     const extension = path.extname(originalName);
 
-    let resourceType = 'auto'; 
     let publicId = nameWithoutExt + "_" + Date.now();
+    
+    // Configuration de base
     let options = {
         folder: folder,
         public_id: publicId,
-        type: 'upload', 
+        type: 'upload', // Ceci rend déjà le fichier public par défaut
     };
-
 
     const isDocument = 
         mimeType.includes('pdf') || 
@@ -27,22 +27,16 @@ const uploadToCloudinary = (buffer, folder, originalName, mimeType) => {
         mimeType.includes('spreadsheet') ||
         extension === '.pdf' || extension === '.docx' || extension === '.pptx';
 
+    // CORRECTION POUR TÉLÉCHARGEMENT : Mode RAW pour les documents
     if (isDocument) {
-        resourceType = 'raw';
-        publicId += extension; 
-        
-        // CORRECTION CRITIQUE : Assurer l'accès public pour les fichiers RAW
+        // Pour les fichiers raw, il est crucial d'ajouter l'extension au public_id
+        // sinon le fichier téléchargé n'aura pas d'extension
         options.resource_type = 'raw';
-        options.public_id = publicId;
-        // Ceci rend le fichier accessible publiquement via l'URL simple
-        options.access_control = 'public'; 
+        options.public_id = publicId + extension; 
     } else {
-        // Pour les images/auto, on peut utiliser resource_type 'auto'
+        // Pour les images
         options.resource_type = 'auto';
-        options.public_id = publicId;
-        options.access_control = 'public'; 
     }
-
 
     const uploadStream = cloudinary.uploader.upload_stream(
       options,
@@ -75,16 +69,16 @@ const uploadFile = async (req, res) => {
       original_filename: req.file.originalname
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Erreur upload." });
+    console.error("Erreur Upload:", error);
+    res.status(500).json({ message: "Erreur lors du téléversement vers le cloud." });
   }
 };
 
-// Les autres fonctions ne changent pas...
+// 2. UPLOAD BANNIÈRE
 const uploadBannerImage = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: 'Aucune image.' });
-    // Pour les images de bannière, on veut qu'elles soient publiques
+    
     const result = await uploadToCloudinary(
         req.file.buffer, 
         'lokolearn_banners', 
@@ -107,7 +101,7 @@ const deleteBannerImage = async (req, res) => {
   try {
     const image = await BannerImage.findById(req.params.id);
     if (!image) return res.status(404).json({ message: "Non trouvé." });
-    // On détruit l'image selon son type (toujours 'image' pour la bannière)
+    
     await cloudinary.uploader.destroy(image.publicId, { resource_type: 'image' });
     await BannerImage.findByIdAndDelete(req.params.id);
     res.json({ message: "Supprimé." });

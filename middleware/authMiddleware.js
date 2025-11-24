@@ -19,39 +19,30 @@ const protect = async (req, res, next) => {
       // Récupérer l'utilisateur associé au token (sans le mot de passe)
       req.user = await User.findById(decoded.id).select('-password');
       
-      // CAS 1 : Utilisateur non trouvé dans la DB mais token valide
       if (!req.user) {
-        return res.status(401).json({ message: 'Non autorisé, utilisateur inexistant' });
+        return res.status(401).json({ message: 'Non autorisé, utilisateur introuvable.' });
       }
 
-      next();
+      // Tout est OK, on passe à la suite
+      return next(); 
+
     } catch (error) {
-      // CAS 2 : Erreur de vérification JWT (token expiré, invalide)
-      console.error('Erreur JWT/Auth:', error.message);
-      return res.status(401).json({ message: 'Non autorisé, token invalide ou expiré' });
+      console.error('Erreur Auth:', error.message);
+      return res.status(401).json({ message: 'Non autorisé, token invalide.' });
     }
-  } else {
-    // CAS 3 : Pas de token dans l'en-tête
-    return res.status(401).json({ message: 'Non autorisé, pas de token' });
   }
 
-  // Si pour une raison inconnue le flux arrive ici sans token et sans erreur, on force le 401
   if (!token) {
-    // Cette ligne est théoriquement déjà couverte par le 'else' plus haut, 
-    // mais je la laisse pour la robustesse.
-    // On doit utiliser 'return' ici pour éviter que 'next()' ne soit appelé
-    return res.status(401).json({ message: 'Non autorisé, pas de token' });
+    return res.status(401).json({ message: 'Non autorisé, aucun token fourni.' });
   }
 };
 
 // Middleware pour vérifier si c'est un professeur ou admin
 const professor = (req, res, next) => {
-  // Le middleware 'protect' doit avoir déjà inséré req.user
   if (req.user && (req.user.role === 'professor' || req.user.role === 'admin')) {
     next();
   } else {
-    // Si req.user n'est pas défini (car protect a planté) ou si le rôle est mauvais
-    res.status(401).json({ message: 'Accès réservé aux professeurs' });
+    res.status(403).json({ message: 'Accès refusé : Réservé aux professeurs.' });
   }
 };
 
