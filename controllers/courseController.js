@@ -65,7 +65,7 @@ const getCourses = async (req, res) => {
   }
 };
 
-// 3. GÉNÉRER UNE URL SIGNÉE POUR LE TÉLÉCHARGEMENT (ULTIME CORRECTION)
+// 3. GÉNÉRER UNE URL SIGNÉE POUR LE TÉLÉCHARGEMENT (CORRECTION FINALE / SIMPLE)
 const getSignedFileUrl = async (req, res) => {
   try {
     const course = await Course.findById(req.params.id);
@@ -74,31 +74,32 @@ const getSignedFileUrl = async (req, res) => {
       return res.status(404).json({ message: "Cours introuvable." });
     }
 
-    // Extraction du Public ID SANS la version (v<...>) et SANS le type (raw/upload)
-    // Cloudinary SDK préfère souvent l'identifiant simple pour le builder d'URL
-    const parts = course.fileUrl.split('/');
-    // L'ID du fichier est le dernier élément, y compris le dossier si présent
-    const fullPublicId = parts.slice(parts.indexOf('lokolearn_cours') - 1).join('/');
+    // Extraction du Public ID (sans la version et sans le protocole)
+    const urlSegments = course.fileUrl.split('/');
+    // L'ID Public est la partie qui commence après le dernier 'upload/' ou 'raw/'
+    // On prend l'index de 'upload' pour remonter au début du chemin relatif
+    const uploadIndex = urlSegments.indexOf('upload');
+    if (uploadIndex === -1) {
+      // Si l'URL n'a pas le mot 'upload', on ne peut pas l'extraire correctement.
+      console.error("URL Cloudinary mal formée:", course.fileUrl);
+      return res.status(500).json({ message: "URL Cloudinary non standard en base de données." });
+    }
+    
+    // Le 'chemin' à signer doit être 'raw/upload/v<version>/lokolearn_cours/...'
+    const relativePath = urlSegments.slice(uploadIndex - 1).join('/');
 
-    // Nettoyage de l'extension pour le public ID (si on utilise le builder de base)
-    // On retire l'extension car le builder la gère.
-    const publicIdWithoutExtension = course.fileUrl.substring(
-        course.fileUrl.lastIndexOf('/') + 1, 
-        course.fileUrl.lastIndexOf('.')
-    );
-
-    // 🏆 Solution ultime : utiliser cloudinary.url() avec le type 'authenticated' et l'extension.
-    // Cette fonction est le moyen le plus direct de construire une URL signée.
-    const signedUrl = cloudinary.url(publicIdWithoutExtension, {
-        resource_type: 'raw', // On garde 'raw'
-        type: 'authenticated', // On force le type 'authenticated' pour que la signature soit incluse
-        format: course.fileType, // On inclut le format (pdf)
-        expires_at: Math.floor(Date.now() / 1000) + (60 * 60)
+    // 🏆 L'appel le plus simple et le plus robuste : 
+    // Utiliser le chemin relatif (incluant raw/upload/...) et l'option 'secure'.
+    // Ceci demande une URL HTTPS signée, ce qui est le comportement désiré.
+    const signedUrl = cloudinary.url(relativePath, {
+        secure: true, 
+        // IMPORTANT : On retire expires_at, car il est géré par défaut dans l'appel
+        // de signature Cloudinary quand 'secure: true' est utilisé pour les téléchargements.
     });
 
     // LOGS DE VÉRIFICATION
-    console.log("--- DEBUG CLOUDINARY SIGNATURE (ULTIME) ---");
-    console.log("Public ID pour signature:", publicIdWithoutExtension);
+    console.log("--- DEBUG CLOUDINARY SIGNATURE (FINAL) ---");
+    console.log("Chemin Relatif Signé:", relativePath);
     console.log("URL Signée Finale:", signedUrl);
     console.log("---------------------------------");
     
@@ -106,9 +107,8 @@ const getSignedFileUrl = async (req, res) => {
 
   } catch (error) {
     console.error("Erreur critique de la fonction cloudinary.url():", error);
-    // On prévient que le problème est très profond maintenant
     res.status(500).json({ 
-        message: 'Échec irréversible de la signature Cloudinary. Veuillez vérifier la configuration de sécurité stricte de votre compte Cloudinary.' 
+        message: 'Échec de la signature Cloudinary. Le problème est l’API Secret ou le chemin du fichier.' 
     });
   }
 };
